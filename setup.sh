@@ -122,7 +122,9 @@ action() {
         # custom packages
         git cms-init
         git cms-addpkg IOMC/ParticleGuns
+        git cms-addpkg RecoHGCal/TICL
         git cms-merge-topic CMS-HGCAL:HGC_CMSSW_11_0_0_pre5
+        git cms-merge-topic riga:ticl_SCmerging_CMSSW_11_0_0_pre5
         git clone https://github.com/CMS-HGCAL/reco-prodtools.git reco_prodtools
         ( cd reco_prodtools; git checkout dev )
         git clone https://github.com/CMS-HGCAL/reco-ntuples.git RecoNtuples

@@ -72,13 +72,45 @@ class ESCPlots(GeneratorParameters):
     def run(self):
         input_path = self.input()["reco"].path
         handle_data = {
-            "escs": {
+            "extendedSimClusters": {
                 "type": "std::vector<ticl::ExtendedSimCluster>",
                 "label": ("extendedSimClusters", "", "RECO"),
+            },
+            "recHitsEE": {
+                "type": "edm::SortedCollection<HGCRecHit,edm::StrictWeakOrdering<HGCRecHit> >",
+                "label": ("HGCalRecHit", "HGCEERecHits", "RECO"),
+            },
+            "recHitsHEF": {
+                "type": "edm::SortedCollection<HGCRecHit,edm::StrictWeakOrdering<HGCRecHit> >",
+                "label": ("HGCalRecHit", "HGCHEFRecHits", "RECO"),
+            },
+            "recHitsHEB": {
+                "type": "edm::SortedCollection<HGCRecHit,edm::StrictWeakOrdering<HGCRecHit> >",
+                "label": ("HGCalRecHit", "HGCHEBRecHits", "RECO"),
+            },
+            "recHitEta": {
+                "type": "std::map<DetId, float>",
+                "label": ("extendedSimClusters", "recHitEta", "RECO"),
+            },
+            "recHitPhi": {
+                "type": "std::map<DetId, float>",
+                "label": ("extendedSimClusters", "recHitPhi", "RECO"),
             },
         }
         for i, (event, data) in enumerate(fwlite_loop(input_path, handle_data)):
             print("event {}".format(i))
 
-            escs = data["escs"]
-            print("radius of esc 0: {}".format(escs[0].showerRadius))
+            clusters = data["extendedSimClusters"]
+            recHitsEE = data["recHitsEE"]
+            recHitsHEF = data["recHitsHEF"]
+            recHitsHEB = data["recHitsHEB"]
+            etaMap = data["recHitEta"]
+            phiMap = data["recHitPhi"]
+
+            print("first rechit energy: {}".format(recHitsEE[0].energy()))
+            print("first rechit detid: {}".format(recHitsEE[0].detid()))
+            print("first rechit eta: {}".format(etaMap[recHitsEE[0].detid()]))
+            print("first rechit phi: {}".format(phiMap[recHitsEE[0].detid()]))
+
+            print("radius of esc 0: {}".format(clusters[0].showerRadius))
+            print("energy of esc 0: {}".format(clusters[0].simCluster.energy()))

@@ -5,7 +5,10 @@ Helpful utilities.
 """
 
 
-__all__ = ["cms_run", "parse_cms_run_event", "cms_run_and_publish", "log_runtime", "hadd_task"]
+__all__ = [
+    "cms_run", "parse_cms_run_event", "cms_run_and_publish", "log_runtime", "hadd_task",
+    "fwlite_loop",
+]
 
 
 import os
@@ -27,7 +30,6 @@ def cms_run(cfg_file, args, yield_output=False):
     cfg_file = os.path.expandvars(os.path.expanduser(cfg_file))
     args_str = " ".join(cms_run_arg(*tpl) for tpl in args)
     cmd = "cmsRun {} {}".format(cfg_file, args_str)
-
     fn = law.util.interruptable_popen if not yield_output else law.util.readable_popen
     return fn(cmd, shell=True, executable="/bin/bash")
 
@@ -111,3 +113,43 @@ def hadd_task(task, inputs, output):
 
                 task.publish_message("merged file size: {:.2f} {}".format(
                     *law.util.human_bytes(os.stat(tmp_out.path).st_size)))
+
+
+def fwlite_loop(path, handle_data=None, start=0, end=-1, object_type="Event"):
+    """
+    Opens one or more ROOT files defined by *path* and yields the FWLite event. When *handle_data*
+    is not *None*, it is supposed to be a dictionary ``key -> {"type": ..., "label": ...}``. In that
+    case, the handle products are yielded as well in a dictionary, mapped to the key, as
+    ``(event, objects dict)``.
+    """
+    import ROOT
+    ROOT.PyConfig.IgnoreCommandLineOptions = True
+    ROOT.gROOT.SetBatch()
+    ROOT.gSystem.Load("libFWCoreFWLite.so")
+    ROOT.gSystem.Load("libDataFormatsFWLite.so")
+    ROOT.FWLiteEnabler.enable()
+    from DataFormats.FWLite import Events, Runs, Handle
+
+    paths = path if isinstance(path, (list, tuple)) else [path]
+
+    handles = {}
+    if handle_data:
+        for key, data in handle_data.items():
+            handles[key] = Handle(data["type"])
+
+    objects = locals()[object_type + "s"](paths)
+    if start > 0:
+        objects.to(start)
+
+    for i, obj in enumerate(objects):
+        if end >= 0 and (start + i) >= end:
+            break
+
+        if handle_data:
+            products = {}
+            for key, data in handle_data.items():
+                obj.getByLabel(data["label"], handles[key])
+                products[key] = handles[key].product()
+            yield obj, products
+        else:
+            yield obj

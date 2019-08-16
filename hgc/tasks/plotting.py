@@ -64,7 +64,7 @@ class ESCPlots(GeneratorParameters):
 
     def output(self):
         return law.SiblingFileCollection([
-            self.local_target("showerRadius.png"),
+            self.local_target("showerRadius.png", store="$HGC_STORE"),
         ])
 
     @law.decorator.notify

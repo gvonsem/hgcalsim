@@ -216,6 +216,8 @@ class GSDTask(ParallelProdWorkflow):
 
 class RecoTask(ParallelProdWorkflow):
 
+    default_eos_store = "$HGC_STORE_EOS_USER"
+
     # set previous_task which ParallelProdWorkflow uses to set the requirements
     previous_task = ("gsd", GSDTask)
 

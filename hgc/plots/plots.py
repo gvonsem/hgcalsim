@@ -4,46 +4,62 @@
 Collection of plot functions.
 """
 
-__all__ = ["particle_rechit_eta_phi_plot"]
+
+__all__ = ["rechit_eta_phi_plot"]
 
 
-import plotlib.root as r
-import ROOT
+import math
+
+import six
 
 
-def particle_rechit_eta_phi_plot(event, particle_name, plot_path):
+def rechit_eta_phi_plot(plot_path, rechit_map, eta_map, phi_map, clusters=None, binning=None):
+    import plotlib.root as r
+    import ROOT
+
     r.setup_style()
     canvas, (pad,) = r.routines.create_canvas()
     pad.cd()
 
-    n_particles = event[particle_name + "_energy"].shape[0]
-    n_rechits = event["rechit_z"].shape[0]
-
-    binning = (1, 0., 4.0, 1, -3.2, 3.2)
+    # create a dummy histogram for easier plotting
+    binning = binning or (1, 1.3, 3.3, 1, -math.pi / 3., math.pi / 3.)
     dummy_hist = ROOT.TH2F("h", ";#eta;#phi;Entries", *binning)
-    particle0_graph = ROOT.TGraph(1)
-    particle_graph = ROOT.TGraph(n_particles)
-    rechit_graph = ROOT.TGraph(n_rechits)
-
-    for j in range(n_particles):
-        eta, phi = event[particle_name + "_eta"][j], event[particle_name + "_phi"][j]
-        if j == 0:
-            particle0_graph.SetPoint(j, eta, phi)
-        particle_graph.SetPoint(j, eta, phi)
-
-    for j in range(n_rechits):
-        eta, phi = event["rechit_eta"][j], event["rechit_phi"][j]
-        rechit_graph.SetPoint(j, eta, phi)
-
     r.setup_hist(dummy_hist, pad=pad)
-    r.setup_graph(particle0_graph, {"MarkerSize": 1.5, "MarkerColor": 3})
-    r.setup_graph(particle_graph, {"MarkerSize": 1.5})
-    r.setup_graph(rechit_graph, {"MarkerSize": 0.25, "MarkerColor": 2})
-
     dummy_hist.Draw()
-    rechit_graph.Draw("P")
-    particle_graph.Draw("P")
-    particle0_graph.Draw("P")
 
+    # legend
+    n_entries = 1 + bool(clusters)
+    x, y = r.tools.get_pad_coordinates("l", "t", h_offset=0.015, v_offset=0.02)
+    legend = ROOT.TLegend(*r.calculate_legend_coords(n_entries, x1=x, x2=x + 0.14, y2=y))
+    r.setup_legend(legend)
+
+    # create the rechit graph
+    rechit_graph = ROOT.TGraph(len(rechit_map))
+    r.setup_graph(rechit_graph, {"MarkerSize": 0.25, "MarkerColor": 2, "LineWidth": 0})
+    for i, (detid, rechit) in enumerate(six.iteritems(rechit_map)):
+        eta = eta_map[detid]
+        phi = phi_map[detid]
+        rechit_graph.SetPoint(i, eta, phi)
+    rechit_graph.Draw("P")
+    legend.AddEntry(rechit_graph, "RecHits")
+
+    # create the simcluster graph when given
+    if clusters:
+        simcluster_graph = ROOT.TGraph(clusters.size())
+        r.setup_graph(simcluster_graph, {"MarkerSize": 1., "MarkerColor": 3, "LineWidth": 0})
+        for i, cluster in enumerate(clusters):
+            simcluster_graph.SetPoint(i, cluster.simCluster.eta(), cluster.simCluster.phi())
+        simcluster_graph.Draw("P")
+        legend.AddEntry(simcluster_graph, "SimClusters")
+
+    # cms label
+    cms_labels = r.routines.create_cms_labels()
+
+    # draw stuff
+    legend.Draw()
+    cms_labels[0].Draw()
+    cms_labels[1].Draw()
+
+    # update and save
     r.update_canvas(canvas)
     canvas.SaveAs(plot_path)

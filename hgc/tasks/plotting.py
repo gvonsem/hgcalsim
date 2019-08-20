@@ -17,38 +17,10 @@ import six
 from hgc.tasks.base import Task
 from hgc.tasks.simulation import GeneratorParameters, RecoTask
 from hgc.util import fwlite_loop
+import hgc.plots.plots as plots
+
 
 luigi.namespace("plot", scope=__name__)
-
-
-# class PlotTask(Task):
-
-#     n_events = NtupTask.n_events
-
-#     def requires(self):
-#         return NtupTask.req(self, n_tasks=1)
-
-#     def output(self):
-#         return law.SiblingFileCollection([
-#             self.local_target("eta_phi_{}.png".format(i))
-#             for i in range(self.n_events)
-#         ])
-
-#     @law.decorator.notify
-#     def run(self):
-#         from hgc.plots.plots import particle_rechit_eta_phi_plot
-
-#         # ensure that the output directory exists
-#         output = self.output()
-#         output.dir.touch()
-
-#         # load the data to a structured numpy array
-#         input_target = self.input()["collection"][0]
-#         data = input_target.load(formatter="root_numpy", treename="ana/hgc")
-
-#         for i, event in enumerate(data):
-#             with output[i].localize("w") as tmp_out:
-#                 particle_rechit_eta_phi_plot(event, "gunparticle", tmp_out.path)
 
 
 class ESCPlots(GeneratorParameters):
@@ -75,11 +47,9 @@ class ESCPlots(GeneratorParameters):
 
     @law.decorator.notify
     def run(self):
-        import plotlib.root as r
-        import ROOT
-
         output_collection = self.output()
         output_collection.dir.touch()
+        plot_path = lambda name: output_collection.dir.child(name, type="f").path
 
         input_path = self.input()["reco"].path
         handle_data = {
@@ -109,42 +79,25 @@ class ESCPlots(GeneratorParameters):
             },
         }
 
-        # setup canvas and pad
-        r.setup_style()
-        canvas, (pad,) = r.routines.create_canvas()
-        pad.cd()
-
-        for i, (event, data) in enumerate(fwlite_loop(input_path, handle_data)):
+        for i, (event, objects) in enumerate(fwlite_loop(input_path, handle_data)):
             print("event {}".format(i))
 
-            rec_hit_map = {}
+            # get objects
+            clusters = objects["extendedSimClusters"]
+            eta_map = objects["recHitEta"]
+            phi_map = objects["recHitPhi"]
+
+            # fill the rechit map
+            rechit_map = {}
             for src in ["recHitsEE", "recHitsHEF", "recHitsHEB"]:
-                collection = data[src]
-                for rec_hit in collection:
-                    rec_hit_map[rec_hit.detid()] = rec_hit
+                collection = objects[src]
+                for rechit in collection:
+                    rechit_map[rechit.detid()] = rechit
 
-            clusters = data["extendedSimClusters"]
-            eta_map = data["recHitEta"]
-            phi_map = data["recHitPhi"]
-
-            # create an eta-phi plot
-            binning = (1, 1.5, 3.5, 1, -math.pi / 3., math.pi / 3.)
-            dummy_hist = ROOT.TH2F("h", ";#eta;#phi;Entries", *binning)
-            rechit_graph = ROOT.TGraph(len(rec_hit_map))
-
-            for i, (det_id, rec_hit) in enumerate(six.iteritems(rec_hit_map)):
-                eta = eta_map[det_id]
-                phi = phi_map[det_id]
-                rechit_graph.SetPoint(i, eta, phi)
-
-            r.setup_hist(dummy_hist, pad=pad)
-            r.setup_graph(rechit_graph, {"MarkerSize": 0.25, "MarkerColor": 2})
-
-            dummy_hist.Draw()
-            rechit_graph.Draw("P")
-
-            r.update_canvas(canvas)
-            canvas.SaveAs(output_collection.dir.child("rechits_eta_phi_0.png", type="f").path)
+            # create an eta-phi plot of the first event
+            if i == 0:
+                plots.rechit_eta_phi_plot(plot_path("rechits_eta_phi_{}.png".format(i)), rechit_map,
+                    eta_map, phi_map, clusters)
 
             # print("first rechit energy: {}".format(recHitsEE[0].energy()))
             # print("first rechit detid: {}".format(recHitsEE[0].detid()))

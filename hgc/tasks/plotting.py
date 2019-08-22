@@ -37,20 +37,36 @@ class ESCPlots(GeneratorParameters):
     """
 
     def requires(self):
-        return RecoTask.req(self, n_tasks=1, branch=0)
+        return RecoTask.req(self, n_tasks=1, branch=0, _prefer_cli=["version", "nevts"])
 
     def output(self):
-        return law.SiblingFileCollection([
-            # self.local_target("showerRadius.png", store="$HGC_STORE"),
-            self.local_target("rechits_eta_phi_0.png", store="$HGC_STORE"),
-        ])
+        return law.SiblingFileCollection(law.util.flatten(
+            # rechit eta-phi plot for the first 5 events
+            [
+                self.local_target("rechits_eta_phi_{}.png".format(i), store="$HGC_STORE")
+                for i in range(min(5, self.nevts))
+            ],
+            # the number of rechits per simcluster
+            self.local_target("rechits_per_simcluster.png", store="$HGC_STORE"),
+            # the number of rechits per simcluster vs. simcluster eta
+            self.local_target("rechits_per_simcluster_vs_eta.png", store="$HGC_STORE"),
+        ))
 
     @law.decorator.notify
     def run(self):
+        # ensure the output directory exists and create a helper to find the path of plots to save
         output_collection = self.output()
         output_collection.dir.touch()
         plot_path = lambda name: output_collection.dir.child(name, type="f").path
 
+        # progress callback
+        publish_progress = self.create_progress_callback(self.nevts)
+        def progress(i):
+            publish_progress(i)
+            if i % 10 == 0:
+                self.publish_message("event {}".format(i))
+
+        # get the input path and define the objects to read
         input_path = self.input()["reco"].path
         handle_data = {
             "extendedSimClusters": {
@@ -58,15 +74,15 @@ class ESCPlots(GeneratorParameters):
                 "label": ("extendedSimClusters", "", "RECO"),
             },
             "recHitsEE": {
-                "type": "edm::SortedCollection<HGCRecHit,edm::StrictWeakOrdering<HGCRecHit> >",
+                "type": "edm::SortedCollection<HGCRecHit,edm::StrictWeakOrdering<HGCRecHit>>",
                 "label": ("HGCalRecHit", "HGCEERecHits", "RECO"),
             },
             "recHitsHEF": {
-                "type": "edm::SortedCollection<HGCRecHit,edm::StrictWeakOrdering<HGCRecHit> >",
+                "type": "edm::SortedCollection<HGCRecHit,edm::StrictWeakOrdering<HGCRecHit>>",
                 "label": ("HGCalRecHit", "HGCHEFRecHits", "RECO"),
             },
             "recHitsHEB": {
-                "type": "edm::SortedCollection<HGCRecHit,edm::StrictWeakOrdering<HGCRecHit> >",
+                "type": "edm::SortedCollection<HGCRecHit,edm::StrictWeakOrdering<HGCRecHit>>",
                 "label": ("HGCalRecHit", "HGCHEBRecHits", "RECO"),
             },
             "recHitEta": {
@@ -77,34 +93,38 @@ class ESCPlots(GeneratorParameters):
                 "type": "std::map<DetId, float>",
                 "label": ("extendedSimClusters", "recHitPhi", "RECO"),
             },
+            "recHitZ": {
+                "type": "std::map<DetId, float>",
+                "label": ("extendedSimClusters", "recHitZ", "RECO"),
+            },
         }
 
-        for i, (event, objects) in enumerate(fwlite_loop(input_path, handle_data)):
-            print("event {}".format(i))
+        # register plots that consider all events
+        n_rechits_per_cluster_plot = plots.n_rechits_per_cluster_plot()
+        n_rechits_per_cluster_vs_eta_plot = plots.n_rechits_per_cluster_vs_eta_plot()
 
-            # get objects
+        # fwlite loop
+        for i, (event, objects) in enumerate(fwlite_loop(input_path, handle_data, end=self.nevts)):
+            progress(i)
+
             clusters = objects["extendedSimClusters"]
-            eta_map = objects["recHitEta"]
-            phi_map = objects["recHitPhi"]
 
-            # fill the rechit map
-            rechit_map = {}
-            for src in ["recHitsEE", "recHitsHEF", "recHitsHEB"]:
-                collection = objects[src]
-                for rechit in collection:
-                    rechit_map[rechit.detid()] = rechit
+            if i < 5:
+                eta_map = objects["recHitEta"]
+                phi_map = objects["recHitPhi"]
+                z_map = objects["recHitZ"]
 
-            # create an eta-phi plot of the first event
-            if i == 0:
+                rechit_map = {}
+                for src in ["recHitsEE", "recHitsHEF", "recHitsHEB"]:
+                    collection = objects[src]
+                    for rechit in collection:
+                        rechit_map[rechit.detid()] = rechit
+
                 plots.rechit_eta_phi_plot(plot_path("rechits_eta_phi_{}.png".format(i)), rechit_map,
-                    eta_map, phi_map, clusters)
+                    eta_map, phi_map, z_map, clusters)
 
-            # print("first rechit energy: {}".format(recHitsEE[0].energy()))
-            # print("first rechit detid: {}".format(recHitsEE[0].detid()))
-            # print("first rechit eta: {}".format(etaMap[recHitsEE[0].detid()]))
-            # print("first rechit phi: {}".format(phiMap[recHitsEE[0].detid()]))
+            n_rechits_per_cluster_plot.fill(clusters)
+            n_rechits_per_cluster_vs_eta_plot.fill(clusters)
 
-            # print("radius of esc 0: {}".format(clusters[0].showerRadius))
-            # print("energy of esc 0: {}".format(clusters[0].simCluster.energy()))
-
-            break
+        n_rechits_per_cluster_plot.finalize(plot_path("rechits_per_simcluster.png"))
+        n_rechits_per_cluster_vs_eta_plot.finalize(plot_path("rechits_per_simcluster_vs_eta.png"))

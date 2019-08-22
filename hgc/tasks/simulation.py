@@ -236,7 +236,6 @@ class RecoTask(ParallelProdWorkflow):
             inputFiles=[inp["gsd"].uri()],
             outputFile=outp["reco"].uri(),
             outputFileDQM=outp["dqm"].uri(),
-            maxEvents=5,
         ))
 
 

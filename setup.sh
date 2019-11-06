@@ -128,6 +128,7 @@ action() {
         git clone https://github.com/CMS-HGCAL/reco-prodtools.git reco_prodtools
         ( cd reco_prodtools; git checkout dev )
         git clone https://github.com/CMS-HGCAL/reco-ntuples.git RecoNtuples
+        git clone https://github.com/jkiesele/graphreco.git RecoHGCal/GraphReco
 
         # compile
         scram b -j

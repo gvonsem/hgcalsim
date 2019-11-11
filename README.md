@@ -12,7 +12,7 @@
 This repository has submodules, so you should clone it with
 
 ```shell
-git clone --recursive https://github.com/CMS-HGCAL/hgcalsim.git
+git clone --recursive https://github.com/gvonsem/hgcalsim.git
 ```
 
 If you want to write files into the common hgcalsim output directory on EOS at `/eos/cms/store/cmst3/group/hgcal/CMG_studies/hgcalsim` (given that you have the necessary permissions), export
